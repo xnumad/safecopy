@@ -1,0 +1,19 @@
+safecopy test suite
+libtestsuite.sh: test suite script library
+config_in.sh: config file for test suite
+test.sh: run all tests
+libsafecopydebug: wrapper library that hooks on libc functions (open, read, seek) to simulate fake IO errors
+
+test0: test wether test libc wrapper library works
+test1: test wether safecopy can copy a simple plain file without errors
+test2: test for softerror recovery
+test3: test for combined softerror harderror recovery
+test4: test for filesize safety and badblock correctness with unreadable end of file
+test5: test completely unreadable file
+test6: test multiple passes with same block size
+test7: test multiple passes with different block size
+test8: test multiple passes with start offset and size limit
+test9: test multiple passes with same block size plus sector exclude list
+test10: test multiple passes with different block plus sector exclude list
+test11: test multiple passes with start offset, size limit plus sector exclude list
+

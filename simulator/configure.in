@@ -1,0 +1,103 @@
+#Process this file with autoconf to produce a configure script.
+
+AC_INIT(configure.in)
+AM_INIT_AUTOMAKE(libsimulator, 1.0.0)
+AM_CONFIG_HEADER(config.h)
+
+#AM_PROG_LIBTOOL
+
+#AC_PREREQ(2.5)
+#AC_ISC_POSIX
+CFLAGS="$CFLAGS -fPIC"
+#add a space to make these macros not add stupid stuff if it was unset
+AC_ISC_POSIX
+AC_PROG_CC
+AM_PROG_CC_STDC
+AC_HEADER_STDC
+
+AC_ARG_ENABLE([debug],[
+AC_HELP_STRING([--enable-debug],
+      [enable debug symbols and disable optimization,
+         (only for GCC, set per-compiler options via $CFLAGS
+         environment variable, when using a different C compiler)
+         and activate additional debug output]
+   )],[
+      if test "x$enableval" = "xno"; then
+         USE_DEBUG="no"
+      else
+         USE_DEBUG="yes"
+      fi
+   ],[
+      USE_DEBUG="undef"
+])
+
+#Set PACKAGE_DATA_DIR in config.h.
+if test "x${datadir}" = 'x${prefix}/share'; then
+  if test "x${prefix}" = "xNONE"; then
+    AC_DEFINE_UNQUOTED(PACKAGE_DATA_DIR,
+       "${ac_default_prefix}/share/${PACKAGE}",[data directory])
+  else
+    AC_DEFINE_UNQUOTED(PACKAGE_DATA_DIR, "${prefix}/share/${PACKAGE}",
+       [data directory])
+  fi
+else
+  AC_DEFINE_UNQUOTED(PACKAGE_DATA_DIR, "${datadir}/${PACKAGE}",
+     [data directory])
+fi
+
+#Set PACKAGE_SOURCE_DIR in config.h.
+packagesrcdir=`cd $srcdir && pwd`
+AC_DEFINE_UNQUOTED(PACKAGE_SOURCE_DIR, "${packagesrcdir}", [source directory])
+
+#Use -Wall if we have gcc.
+if test "x$GCC" = "xyes"; then
+   if test "x$USE_DEBUG" = "xyes"; then
+      CFLAGS="$CFLAGS -O0 -g -Wall"
+   else
+      CFLAGS="$CFLAGS -O2 -finline-functions -fno-strict-aliasing -Wall";
+   fi
+fi
+
+AC_CHECK_LIB(dl, dlsym,,AC_MSG_ERROR("libdl is required"))
+
+dnl If we're using gcc here define _GNU_SOURCE
+AC_MSG_CHECKING("for RTLD_NEXT from dlfcn.h")
+AC_EGREP_CPP(yes,
+[
+ #include <dlfcn.h>
+ #ifdef RTLD_NEXT
+        yes
+ #endif
+], [
+  AC_MSG_RESULT(yes)
+], [
+  AC_MSG_RESULT(no)
+  AC_MSG_CHECKING("for RTLD_NEXT from dlfcn.h with _GNU_SOURCE")
+  AC_EGREP_CPP(yes,
+  [
+   #define _GNU_SOURCE
+   #include <dlfcn.h>
+   #ifdef RTLD_NEXT
+        yes
+   #endif
+  ], [
+    AC_MSG_RESULT(yes)
+    AC_DEFINE([USE_GNU_SOURCE],[],[gnusource])
+  ], [
+    AC_MSG_ERROR(no)
+  ])
+])
+
+
+
+
+AC_OUTPUT([
+Makefile
+src/Makefile
+])
+AC_MSG_RESULT([[
+-----------------------------------------------------------------------
+             compile configuration completed successfully
+
+]])
+

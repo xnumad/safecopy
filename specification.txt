@@ -1,0 +1,228 @@
+Safecopy copies data from a source file to a destination file.
+To specify the intended behaviour, such is defined by
+the pseudo-code sequences below.
+
+Sequences are
+STARTUP: initializes program execution.
+COPY: copies data more or less sequentially.
+RECOVER: recover from an IO error - reopen source file.
+SEEK-START: find the true beginning of a bad area.
+SKIP: skip over bad data.
+MARK: mark or list bad data in output files.
+SEEK-END: find the exact end of a bad area.
+END: cleanup and program end.
+
+The following variables are referenced in this specification:
+
+READPOS: the to be read next data in the source file.
+SPOS: the actual file pointer on the source file.
+REMAIN: the size of to be read data in the next read operation.
+RETRY: a counter for retrying a certain read position.
+
+Safecopy starts by executing the STARTUP sequence.
+
+Sequences:
+
+STARTUP:
+	Initializes and auto detects program parameters.
+	- check command line options for validity, abort execution if invalid
+	  parameters are given.
+	- check source file parameters via stat() system call and find out
+	  default block and file sizes in case they are not overridden by
+	  command line parameters.
+	- initialize the default block size (-b) defaulting to hardware block
+	  size.
+	- initialize the skip block size (-f) defaulting to -b * 16.
+	- initialize the skip resolution (-r) defaulting to -b.
+	- read in and initialize all other command line parameters.
+	- open include file (-I) and include block size (-i) if given.
+	- open exclude file (-X) and exclude block size (-x) if given.
+	- open badblock output file (-o) if given.
+	- open source file.
+	- open destination file, open in truncate mode, deleting content if -I
+	  has not been specified.
+	- on failure of any of the above abort safecopy execution and exit.
+	- set file size pointer READPOS to -s if specified or zero otherwise.
+	- set input file pointer SPOS to zero
+	- set REMAIN to zero.
+	- set RETRY to -R
+	- execute the COPY sequence.
+
+RECOVER:
+	The recover sequence will make a file handle that become unusable
+	after an IO error usable again and can be called in COPY and SKIP
+	mode
+	- close source file.
+	- for as many times as the -Z option specified repeat:
+	  - re-open source file.
+	  - seek to position 0 in source file.
+	  - attempt to read one byte of data, then discard, ignoring errors.
+	  - close source file.
+	  - re-open source file.
+	  - seek to the last block of the source file.
+	  - attempt to read one byte of data, then discard, ignoring errors.
+	  - close source file
+	- open source file again - on failure abort safecopy execution and
+	  exit.
+	- set file pointer SPOS to zero.
+	- end of sequence, resume previous operation.
+
+MARK:
+	The mark sequence will write marker data to the destination file and
+	list bad blocks into the badblocks output file.
+	It gets two parameters FROM and TO pointing to file positions.
+	- if an include file is given with -I and the area from FROM to TO is
+	  not completely covered by include blocks of size -i, then
+	  -	execute the MARK sequence recursively on all data areas
+		covered by include blocks only.
+	  -	End of sequence, resume previous operation.
+	  Any data beyond the size of the destination file prior to program
+	  execution and beyond the last include block in the include file is
+	  treated as if it was covered by such include blocks. 
+	- if an exclude file is given with -X and the area from FROM to TO is
+	  partially covered by exclude blocks of size -x, then
+	  -	execute the MARK sequence recursively on all data areas NOT
+		covered by exclude blocks only.
+	  -	End of sequence, resume previous operation.
+	- if a badblocks output file -o has been specified, then write all
+	  blocks of size -b covered by the area from FROM up to but not
+	  including the address TO, that have not yet been written to the
+	  badblocks output file -o to the badblocks output file -o.
+	- if a marker data string has been specified with -M then write this
+	  string into the destination file from FROM up to but not including
+	  address TO. If a start offset has been given with -s the data is
+	  instead written to the area from FROM minus -s up to but not
+	  including TO minus -s.
+	- end of sequence, resume previous operation.
+
+END:
+	The end sequence finishes safecopys execution and closes all files.
+	- if the calling sequence was SKIP and the source position READPOS is smaller
+	  then the determined file size of the source, then execute the MARK
+	  sequence FROM the last data copied in COPY mode, TO the
+	  file size of the input file.
+	- close all files, free used memory.
+	- exit program.
+
+
+COPY:
+	The copy sequence handles regular data copying from source to
+	destination.
+	- if a maximum length has been specified with -l and READPOS is
+	  greater than -s plus -l, execute the END sequence.
+	- if REMAIN is zero then
+	  - if in include file was specified with -I and READPOS is not within
+	    an include block and not both beyond the last such include block
+	    and beyond the size of the destination file prior to program execution then
+	    - set READPOS to the start of the next include block.
+	  - set REMAIN to be the difference between READPOS and the next block
+	    boundary in the source file according to -b
+	- if an exclude file was specified with -X then
+	  - if READPOS is covered by an exclude block, set READPOS to the end
+	    of said exclude block, then restart the COPY sequence.
+	  - if READPOS is not covered but any data between READPOS and
+	    READPOS+REMAIN is covered by exclude blocks, set REMAIN to the
+	    exact size of data not covered by exclude blocks starting at
+	    READPOS.
+	- if READPOS is not equal to SPOS, seek within the source file to
+	  READPOS. Set both SPOS and READPOS to the file pointer after the
+	  seek attempt. If the seek attempt failed, this means setting READPOS
+	  to SPOS. If the seek tried to seek beyond the end of the input file,
+	  execute the END sequence.
+	- attempt to read REMAIN bytes from the source file.
+	- if reading from source failed, then
+	  - reduce RETRY by one.
+	  - if RETRY is zero, then 
+	    - execute the SEEK-START sequence.
+	  - else
+	    - execute the RECOVER sequence.
+	- else if data was read.
+	  - set RETRY to the -R value.
+	  - set READPOS to READPOS plus the bytes successfully read.
+	  - set SPOS to the new source file position (=READPOS)
+	  - seek in destination file to position READPOS minus the start
+	    offset -s.
+	  - write the read data to the destination file at that position.
+	  - set REMAIN to the old value of REMAIN min us the bytes
+	    successfully read.
+	- else if EOF in input is reached, execute the END sequence.
+	- re-execute the COPY sequence.
+
+SEEK-START:
+	The seek-start sequence tries to find the exact beginning of a bad
+	area.
+	- execute the RECOVER sequence.
+	- if REMAIN is bigger than resolution -r then
+	  - set REMAIN to 50% of its old value.
+	  - attempt to seek to position READPOS in source. On failure execute
+	    the END sequence.
+	  - attempt to read REMAIN bytes at position READPOS in source.
+	  - if the read attempt failed, then
+	    - re-execute the SEEK_START sequence.
+	  - else
+	    - set RETRY to the -R value.
+	    - set READPOS to READPOS plus the bytes successfully read.
+	    - set SPOS to the new source file position (=READPOS)
+	    - seek in destination file to position READPOS minus the start
+	      offset -s.
+	    - write the read data to the destination file at that position.
+	    - set REMAIN to the old value of REMAIN min us the bytes
+	      successfully read.
+	    - execute the COPY sequence.
+	- else
+	  - execute the SKIP sequence.
+
+SKIP:
+	The skip sequence skips over a bad area in the input file.
+	- execute the RECOVER sequence.
+	- if the calling sequence was SKIP then
+	  - execute the MARK sequence FROM the attempted reading position of the
+	    last SKIP execution TO the current read position READPOS
+	- else
+	  - execute the MARK sequence FROM the current reading position
+	    READPOS TO the current reading position READPOS.
+	- increase READPOS by the skip size (-f) rounded to the last block
+	  boundary of size (-b)
+	- if an exclude file was specified with -X then
+	  - if READPOS is covered by an exclude block, set READPOS to the end
+	    of said exclude block, then check again.
+	  - if READPOS is not covered but any data between READPOS and
+	    READPOS+REMAIN is covered by exclude blocks, set REMAIN to the
+	    exact size of data not covered by exclude blocks starting at
+	    READPOS.
+	- attempt to seek to READPOS in source. On failure execute the END
+	  sequence.
+	- attempt to read one block of data from READPOS in source.
+	- if the read attempt succeeded, then
+	  - set REMAIN to -f
+	  - execute the SEEK-END sequence.
+	- else
+	  - re-execute the SKIP sequence
+
+SEEK-END:
+	The seek-end sequence tries to find the end of a bad area to then
+	continue copying there.
+	- if REMAIN is bigger than resolution -r then
+	  - decrease REMAIN by 50%.
+	  - decrease READPOS by REMAIN.
+	  - if an exclude file was specified with -X then
+	    - if READPOS is covered by an exclude block, set READPOS to the end
+	      of said exclude block, then check again.
+	    - if READPOS is not covered but any data between READPOS and
+	      READPOS+REMAIN is covered by exclude blocks, set REMAIN to the
+	      exact size of data not covered by exclude blocks starting at
+	      READPOS.
+	  - attempt to seek to READPOS in source. On failure execute the COPY
+	    sequence.
+	  - attempt to read one block of data from READPOS in source..
+	  - if the read attempt succeeded then
+	    - re-execute the SEEK-END sequence.
+	  - else
+	    - increase READPOS by REMAIN.
+	    - re-execute the SEEK-END sequence.
+	- else
+	  - execute the MARK sequence FROM the last failed read position from
+	    previous SKIP sequence TO READPOS.
+	  - execute the COPY sequence.
+
+

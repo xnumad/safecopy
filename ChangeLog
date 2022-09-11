@@ -1,0 +1,71 @@
+2005.06.09: Creation of project (Corvus Corax)
+
+2005.06.12: fix of lseek64 definition problem
+
+2009.02.01:
+- Added "retry" feature.
+- Fixed output to be more consistent and posibly machine parseable to create a bad block list more easily.
+- Fixed calculation of soft and hard errors.
+
+2009.02.03:
+- Added badblock file creation.
+- Added incremental mode to improve a filesystem image based on an existing badblock list.
+- Automatic blocksize calculation based on stat().
+- Percentage counter in case of known filesize (or maximum size given on commandline).
+- Smily indicator based on data read timing.
+
+2009.02.05:
+- Added head-realignment trick to improve error recovery on some drives.
+- Added resume functionality
+- Text output refurbished and made terminal dependant
+- Badblocks exclusion lists supported
+- Mark-padding feature (to find read-failure affected files in a safecopied filesystem image)
+- Documentation updated
+
+2009.02.10:
+- Added low level IO layer to bypass driver functions on some devices
+- Changed the logic to skip over bad areas to be independent of hw block sizes
+- Documentation updated
+
+2009.04.13:
+- Fixed disk detection on CD / DVD drives
+- Correct sector address calculation in raw mode acces on different types of CDs
+- Floppy low level IO now supports twaddle syscall
+- Man page added to documentation
+
+2009.05.06
+- Added support for autodetecting true hardware block and disk sizes using low level calls on CDs
+- Added support for relative sizes in command line option (e.g. -f 10% )
+- Added command line presets for multi staged data rescue that set sensible, overridable defaults.
+- Fixed problem that lead to previously rescued parts of a file being overwritten with bad block marker data during an incremental run in case of read errors just past the end of a known bad area (bad area grew)
+- Limited dynamic memory allocation to one block, regardless of fault skip block size used.
+- Altered behaviour of bad block marker code to keep destination file size equal to source file size, even if the end of the source is unreadable and needs to be skipped.
+- Command line help is now written to stdout instead of stderr
+
+2009.05.13
+- Wrote a test library and test cases to verify safecopys behaviour under controlled conditions.
+- Rewrote parts of safecopies internal logic to assure passing of all test cases.
+- Wrote defined specification of safecopies intended behaviour.
+
+2009.07.15
+- Test suite scripts have been rewritten to be more portable.
+- Some fixes in documentation.
+
+2009.07.18
+- Support for synchronous direct IO via O_DIRECT added.
+- Improved the test debug library to simulate delays and timeouts.
+
+2009.07.28
+- Added documentation for simulation benchmark creation.
+- Moved test library in source tree and renamed to "simulator".
+- Added benchmarking subproject.
+
+2009.09.09
+- Fixed a bug with badblock include file handling ( ID: 2854324 )
+
+2012.03.10
+- New --forceopen option to wait for removable drives to come back
+- New -c (continue) option to resume when copying directly unto devices
+- Return codes:  (0 for success, 2 for abort/ error, 1 for incomplete copy)
+- Adapted test suite to test for these return codes
+- Code cleanup
