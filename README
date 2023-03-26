@@ -1,3 +1,11 @@
+# Branch `forceopen-fix`
+
+This branch modifies safecopy so you can read from a USB flash drive that is disconnecting and re-connecting after every few reads.
+I was trying out various open source software and safecopy seemed appropriate, esp. with the `--forceopen` option.
+I still had to adjust the code to try "force opening" under more circumstances (see the "zero_blocks" commit), hence this branch.
+
+---
+
 Safe copying of files and partitions.
 
 Idea:
