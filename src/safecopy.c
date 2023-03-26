@@ -767,9 +767,20 @@ int close_and_reopen_source_file(struct config_struct *configvars, struct status
 		if (wantabort) break;
 	}
 	statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
-	while (statusvars->source == -1 && statusvars->forceopen && !wantabort ) {
-		sleep(1);
-		statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
+	if (statusvars->forceopen && !wantabort) {
+		int force_counter = 0;
+		while (statusvars->source != -1) {
+			printf("statusvars->source != -1\n");
+			if (force != 1) break;
+			if (force_counter++ <= 3) { //3 tries
+				printf("Forcing reopening nonetheless\n"); //because it was sometimes falsely triggered
+			} else {
+				printf("Forced enough.\n");
+				break;
+			}
+			sleep(1);
+			statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
+		}
 	}
 	if (statusvars->source == -1) {
 		perror("\nError reopening sourcefile after read error ");
