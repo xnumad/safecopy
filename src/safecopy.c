@@ -1275,6 +1275,7 @@ int main(int argc, char ** argv) {
 	fflush(stdout);
 	fflush(stderr);
 	// main data loop. Continue until all data has been read or CTRL+C has been pressed
+	unsigned int zero_block_counter = 0;
 	while (!wantabort && statusvars->block != 0 && ( statusvars->readposition < statusvars->length || statusvars->length < 0)) {
 
 // 6.a planning - calculate wanted read position based on include/exclude input files
@@ -1560,6 +1561,17 @@ int main(int argc, char ** argv) {
 		statusvars->output = 0;
 
 // 6.f processing - react according to result of read operation
+		if (statusvars->block != 0)
+		{
+			zero_block_counter = 0; //reset the counter
+		}
+		else if (statusvars->forceopen && !wantabort) {
+			if (zero_block_counter++ >= 3) {
+				break; //abort, apparently really the end
+			}
+			if (close_and_reopen_source_file(configvars, statusvars, 1) != 0)
+				break;
+		}
 // 6.f.1 successful read:
 		if ( statusvars->block > 0) {
 			debug(DEBUG_IO, "debug: successful read\n");
