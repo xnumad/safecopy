@@ -740,6 +740,50 @@ void select_for_reading(int source , struct config_struct *configvars, struct st
 	} while (! ( FD_ISSET( source , &rfds) || FD_ISSET( source , &efds)));
 }
 
+// 6.f.2.c close and reopen source file
+int close_and_reopen_source_file(struct config_struct *configvars, struct status_struct *statusvars, int force) {
+	// reopen source file to clear possible error flags preventing us from getting more data
+	close(statusvars->source);
+	// do some forced seeks to move head around.
+	for ( statusvars->cseeks = 0; statusvars->cseeks < statusvars->seeks ; statusvars->cseeks ++) {
+		debug(DEBUG_SEEK, "debug: forced head realignment\n");
+		// note. must use O_RSYNC since with O_DIRECT / raw devices, lseek to end of file might not work
+		statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | O_RSYNC );
+		if (statusvars->source) {
+			lseek(statusvars->source, 0, SEEK_SET);
+			select_for_reading(statusvars->source, configvars, statusvars);
+			if (wantabort) break;
+			read(statusvars->source, statusvars->databuffer , statusvars->blocksize );
+			close(statusvars->source);
+		}
+		statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | O_RSYNC );
+		if (statusvars->source) {
+			lseek(statusvars->source,- statusvars->blocksize , SEEK_END);
+			select_for_reading(statusvars->source, configvars, statusvars);
+			if (wantabort) break;
+			read(statusvars->source, statusvars->databuffer , statusvars->blocksize );
+			close(statusvars->source);
+		}
+		if (wantabort) break;
+	}
+	statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
+	while (statusvars->source == -1 && statusvars->forceopen && !wantabort ) {
+		sleep(1);
+		statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
+	}
+	if (statusvars->source == -1) {
+		perror("\nError reopening sourcefile after read error ");
+		wantabort = 2;
+		return 1;
+	}
+	if ( statusvars->seekable ) {
+		// in seekable input, a re-opening sets the pointer to zero
+		// we must reflect that.
+		statusvars->sposition = 0;
+	}
+	return 0;
+}
+
 // main
 int main(int argc, char ** argv) {
 
@@ -1684,46 +1728,8 @@ int main(int argc, char ** argv) {
 
 			if (wantabort) break;
 
-// 6.f.2.c close and reopen source file
-			// reopen source file to clear possible error flags preventing us from getting more data
-			close(statusvars->source);
-			// do some forced seeks to move head around.
-			for ( statusvars->cseeks = 0; statusvars->cseeks < statusvars->seeks ; statusvars->cseeks ++) {
-				debug(DEBUG_SEEK, "debug: forced head realignment\n");
-				// note. must use O_RSYNC since with O_DIRECT / raw devices, lseek to end of file might not work
-				statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | O_RSYNC );
-				if (statusvars->source) {
-					lseek(statusvars->source, 0, SEEK_SET);
-					select_for_reading(statusvars->source, configvars, statusvars);
-					if (wantabort) break;
-					read(statusvars->source, statusvars->databuffer , statusvars->blocksize );
-					close(statusvars->source);
-				}
-				statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | O_RSYNC );
-				if (statusvars->source) {
-					lseek(statusvars->source,- statusvars->blocksize , SEEK_END);
-					select_for_reading(statusvars->source, configvars, statusvars);
-					if (wantabort) break;
-					read(statusvars->source, statusvars->databuffer , statusvars->blocksize );
-					close(statusvars->source);
-				}
-				if (wantabort) break;
-			}
-			statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
-			while (statusvars->source == -1 && statusvars->forceopen && !wantabort ) {
-			 	sleep(1);
-				statusvars->source = open(configvars->sourcefile, O_RDONLY | O_NONBLOCK | statusvars->syncmode );
-			}
-			if (statusvars->source == -1) {
-				perror("\nError reopening sourcefile after read error ");
-				wantabort = 2;
+			if (close_and_reopen_source_file(configvars, statusvars, 0) != 0)
 				break;
-			}
-			if ( statusvars->seekable ) {
-				// in seekable input, a re-opening sets the pointer to zero
-				// we must reflect that.
-				statusvars->sposition = 0;
-			}
 		}
 	}
 
